@@ -4,7 +4,7 @@
 // l'app continueront de voir l'ancienne version en cache.
 const CACHE_VERSION = 'cce-reader-v1';
 const PRECACHE_URLS = [
-  './cce-reader-v2-7.html',
+  './index.html',
   './manifest-reader.json',
   './icon-reader-192.png',
   './icon-reader-512.png',
