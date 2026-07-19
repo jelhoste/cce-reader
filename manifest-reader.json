@@ -2,7 +2,7 @@
   "name": "CCE Reader",
   "short_name": "CCE Reader",
   "description": "Lecteur de grilles d'accords et paroles pour la scène, avec métronome visuel.",
-  "start_url": "./cce-reader-v2-7.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
