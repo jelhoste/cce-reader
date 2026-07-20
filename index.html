@@ -13527,29 +13527,9 @@ function trebleCanvasCY(measures, lg){
   return MARGIN_TOP+STEM_H_C+BEAM_EXTRA+topNotes;
 }
 
-// Visibilité d'un type de notation selon les préférences du Reader — utilisé
-// à la fois pour décider si on RENDU le contenu (renderNotationCell) et pour
-// décider si on RÉSERVE de la place pour lui (getNotationHeight). Centralisé
-// ici pour que les deux ne puissent jamais se désynchroniser : sans ça, un
-// type caché à l'affichage mais toujours compté dans la hauteur de ligne
-// laisse un grand espace vide entre les lignes.
-function _notationTypeVisible(type){
-  if(typeof prefs==='undefined') return true;
-  if(type==='rhythm'&&prefs.showRhythmNotation===false) return false;
-  if(type!=='rhythm'&&prefs.showOtherNotation===false) return false;
-  if(type==='treble'&&prefs.showNotationTreble===false) return false;
-  if(type==='bass'&&prefs.showNotationBass===false) return false;
-  if(type==='drums'&&prefs.showNotationDrums===false) return false;
-  if(type==='guitar'&&prefs.showNotationGuitar===false) return false;
-  if(type==='bass-tab'&&prefs.showNotationBassTab===false) return false;
-  if(type==='grand'&&prefs.showNotationGrand===false) return false;
-  if(type==='ut'&&prefs.showNotationUt===false) return false;
-  return true;
-}
 const NOTATION_H={rhythm:42,treble:100,bass:90,grand:140,drums:90,text:40};
 function getNotationHeight(n,m){
   if(!n) return 0;
-  if(!_notationTypeVisible(n.type||'rhythm')) return 0;
   if(n.type==='drums') return drumStaffH(_drumCanvasLG,m?drumMinLP(m):null);
   if(n.type==='bass'){
     const clg=_bassCanvasLG;
@@ -14241,7 +14221,17 @@ function renderRhythmInto(svg, m, W, interactive){
 function renderNotationCell(cell,m,w){
   const type=m.notation.type||'rhythm';
   // ── Filtre d'affichage Reader (n'affecte que la visibilité, pas le moteur de rendu) ──
-  if(!_notationTypeVisible(type)) return;
+  if(typeof prefs!=='undefined'){
+    if(type==='rhythm'&&prefs.showRhythmNotation===false) return;
+    if(type!=='rhythm'&&prefs.showOtherNotation===false) return;
+    if(type==='treble'&&prefs.showNotationTreble===false) return;
+    if(type==='bass'&&prefs.showNotationBass===false) return;
+    if(type==='drums'&&prefs.showNotationDrums===false) return;
+    if(type==='guitar'&&prefs.showNotationGuitar===false) return;
+    if(type==='bass-tab'&&prefs.showNotationBassTab===false) return;
+    if(type==='grand'&&prefs.showNotationGrand===false) return;
+    if(type==='ut'&&prefs.showNotationUt===false) return;
+  }
   if(type==='rhythm') renderRhythm(cell,m,w);
   else if(type==='drums') renderDrumsCell(cell,m,w);
   else if(type==='treble') renderTrebleCell(cell,m,w);
