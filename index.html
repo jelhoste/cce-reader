@@ -104,7 +104,7 @@
   --typo-sym-weight:300;
 
   /* Layout */
-  --row-h:80px; --bar-w:1.5px;
+  --row-h:64px; --bar-w:1.5px;
   --chord-pad:2px; --chord-fill:1.0; --chord-letter-spacing:-0.06em;
   --nc-letter-spacing:-0.05em;
   --chord-offset-x:-3px;
@@ -1530,7 +1530,7 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
       <div class="tb-group">
         <span class="tb-gl">H.ligne</span>
         <button class="tbtn sq" onclick="tbStep('rowh-sl',-2,v=>applyRowH(v))">−</button>
-        <input type="number" class="tb-num" id="rowh-sl" min="30" max="160" step="2" value="80" onchange="applyRowH(this.value)">
+        <input type="number" class="tb-num" id="rowh-sl" min="30" max="160" step="2" value="64" onchange="applyRowH(this.value)">
         <button class="tbtn sq" onclick="tbStep('rowh-sl',2,v=>applyRowH(v))">+</button>
       </div>
       <div class="tb-group">
@@ -2153,13 +2153,13 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
       <div class="fg"><label class="fl">Hauteur de ligne (px)</label>
         <div class="stepper">
           <button class="step-btn left" onclick="stepVal('rowh-sl2',-2,v=>{document.getElementById('rowh-sl').value=v;applyRowH(v)})">−</button>
-          <input type="number" class="fi" id="rowh-sl2" min="30" max="160" step="2" value="80" oninput="document.getElementById('rowh-sl').value=this.value;applyRowH(this.value)">
+          <input type="number" class="fi" id="rowh-sl2" min="30" max="160" step="2" value="64" oninput="document.getElementById('rowh-sl').value=this.value;applyRowH(this.value)">
           <button class="step-btn right" onclick="stepVal('rowh-sl2',2,v=>{document.getElementById('rowh-sl').value=v;applyRowH(v)})">+</button>
         </div></div>
       <div class="fg"><label class="fl">Marges page (mm)</label>
         <div class="stepper">
           <button class="step-btn left" onclick="stepVal('fmt-pad-mm',-1,applyPagePad)">−</button>
-          <input type="number" class="fi" id="fmt-pad-mm" value="10" min="0" max="40" step="1" oninput="applyPagePad()">
+          <input type="number" class="fi" id="fmt-pad-mm" value="7" min="0" max="40" step="1" oninput="applyPagePad()">
           <button class="step-btn right" onclick="stepVal('fmt-pad-mm',1,applyPagePad)">+</button>
         </div></div>
     </div>
@@ -4132,7 +4132,7 @@ function setPrintMode(on){
 function mm(v){return v*pxPerMm}
 
 // ════ STATE ══════════════════════════════════════════════
-let PAGE_PAD_MM=10;
+let PAGE_PAD_MM=7;
 let state={
   song:{title:'Mon morceau',composer:'',arranger:'',key:'C',tempo:120,style:'',notes:''},
   transposeDisplay:0,    // delta d'affichage (ne modifie pas les accords)
@@ -13527,9 +13527,29 @@ function trebleCanvasCY(measures, lg){
   return MARGIN_TOP+STEM_H_C+BEAM_EXTRA+topNotes;
 }
 
+// Visibilité d'un type de notation selon les préférences du Reader — utilisé
+// à la fois pour décider si on RENDU le contenu (renderNotationCell) et pour
+// décider si on RÉSERVE de la place pour lui (getNotationHeight). Centralisé
+// ici pour que les deux ne puissent jamais se désynchroniser : sans ça, un
+// type caché à l'affichage mais toujours compté dans la hauteur de ligne
+// laisse un grand espace vide entre les lignes.
+function _notationTypeVisible(type){
+  if(typeof prefs==='undefined') return true;
+  if(type==='rhythm'&&prefs.showRhythmNotation===false) return false;
+  if(type!=='rhythm'&&prefs.showOtherNotation===false) return false;
+  if(type==='treble'&&prefs.showNotationTreble===false) return false;
+  if(type==='bass'&&prefs.showNotationBass===false) return false;
+  if(type==='drums'&&prefs.showNotationDrums===false) return false;
+  if(type==='guitar'&&prefs.showNotationGuitar===false) return false;
+  if(type==='bass-tab'&&prefs.showNotationBassTab===false) return false;
+  if(type==='grand'&&prefs.showNotationGrand===false) return false;
+  if(type==='ut'&&prefs.showNotationUt===false) return false;
+  return true;
+}
 const NOTATION_H={rhythm:42,treble:100,bass:90,grand:140,drums:90,text:40};
 function getNotationHeight(n,m){
   if(!n) return 0;
+  if(!_notationTypeVisible(n.type||'rhythm')) return 0;
   if(n.type==='drums') return drumStaffH(_drumCanvasLG,m?drumMinLP(m):null);
   if(n.type==='bass'){
     const clg=_bassCanvasLG;
@@ -14221,17 +14241,7 @@ function renderRhythmInto(svg, m, W, interactive){
 function renderNotationCell(cell,m,w){
   const type=m.notation.type||'rhythm';
   // ── Filtre d'affichage Reader (n'affecte que la visibilité, pas le moteur de rendu) ──
-  if(typeof prefs!=='undefined'){
-    if(type==='rhythm'&&prefs.showRhythmNotation===false) return;
-    if(type!=='rhythm'&&prefs.showOtherNotation===false) return;
-    if(type==='treble'&&prefs.showNotationTreble===false) return;
-    if(type==='bass'&&prefs.showNotationBass===false) return;
-    if(type==='drums'&&prefs.showNotationDrums===false) return;
-    if(type==='guitar'&&prefs.showNotationGuitar===false) return;
-    if(type==='bass-tab'&&prefs.showNotationBassTab===false) return;
-    if(type==='grand'&&prefs.showNotationGrand===false) return;
-    if(type==='ut'&&prefs.showNotationUt===false) return;
-  }
+  if(!_notationTypeVisible(type)) return;
   if(type==='rhythm') renderRhythm(cell,m,w);
   else if(type==='drums') renderDrumsCell(cell,m,w);
   else if(type==='treble') renderTrebleCell(cell,m,w);
@@ -16713,6 +16723,7 @@ function reflow(){
           // Utiliser top au lieu de bottom pour la compatibilité print
           // Positionner via la cellule parente (comme --ov-offset-volta sur :root pour les voltas)
           cell.style.setProperty('--ov-offset-volta', yOff+'px');
+          if(pl.color) cell.style.setProperty('--ped-c', pl.color);
           vEl.style.setProperty('--ped-left', xS+'%');
           vEl.style.setProperty('--ped-right', (span<=1?100-xE:0)+'%');
           vEl.style.setProperty('--ped-w', lw);
@@ -16739,6 +16750,7 @@ function reflow(){
             vEl.className='ped-line'+styleCls;
             const lw2=(pl.lineW||2)+'px';
             cell.style.setProperty('--ov-offset-volta', yOff+'px');
+            if(pl.color) cell.style.setProperty('--ped-c', pl.color);
             vEl.style.setProperty('--ped-left', '0%');
             vEl.style.setProperty('--ped-right', (isLast?100-xE:0)+'%');
             vEl.style.setProperty('--ped-w', lw2);
@@ -16768,6 +16780,10 @@ function reflow(){
           if(so.weight) s.style.fontWeight=so.weight;
           if(so.fontStyle) s.style.fontStyle=so.fontStyle;
           if(so.font) s.style.fontFamily=so.font;
+          if(so.color){
+            if(so.style==='badge'){ s.style.background=so.color; s.style.borderColor=so.color; }
+            else { s.style.color=so.color; }
+          }
           if(so.offsetX||so.offsetY) s.style.transform=`translate(${so.offsetX||0}px,${so.offsetY||0}px)`;
           s.style.cursor='pointer';s.title='Cliquer pour modifier';
           s.addEventListener('click',e=>{e.stopPropagation();select(idx);openSecPanel(idx);});
@@ -16790,6 +16806,7 @@ function reflow(){
             }
             if(off.size) se.style.fontSize=off.size+'px';
             if(off.x||off.y) se.style.transform=`translate(${off.x||0}px,${off.y||0}px)`;
+            if(off.color) se.style.color=off.color;
             se.style.cursor='pointer';
             se.title='Cliquer pour modifier';
             se.addEventListener('click',e=>{
@@ -16809,6 +16826,7 @@ function reflow(){
           const a=document.createElement('div');a.className='meas-annotation';a.innerHTML=m.annotation;
           if(ao.size) a.style.fontSize=ao.size+'px';
           if(ao.align) a.style.textAlign=ao.align;
+          if(ao.color) a.style.color=ao.color;
           if(ao.offsetX||ao.offsetY) a.style.transform=`translate(${ao.offsetX||0}px,${ao.offsetY||0}px)`;
           a.style.cursor='text';a.title='Cliquer pour modifier';
           a.addEventListener('click',e=>{e.stopPropagation();select(idx);openAnnotPanel(idx);});
@@ -17011,6 +17029,7 @@ function reflow(){
             const baseH=isSimile?'left:50%;transform:translate(calc(-50% + '+(fo.x||0)+'px),calc(22px + '+(fo.y||0)+'px))'
                                  :'left:0;transform:translate('+(fo.x||0)+'px,calc(22px + '+(fo.y||0)+'px))';
             fWrap.style.cssText='position:absolute;bottom:100%;margin-bottom:1px;'+baseH+';color:var(--section-c);z-index:12';
+            if(fo.color) fWrap.style.color=fo.color;
             const fermataDefaultPx=(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--typo-sym-size'))||20)*3;
             fWrap.appendChild(createSymbolSVG('𝄐', fo.size||fermataDefaultPx));
             cell.appendChild(fWrap);
