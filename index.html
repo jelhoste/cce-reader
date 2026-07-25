@@ -1491,6 +1491,10 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
     <div class="dd-lbl">Setlist</div>
     <div class="dd-item" onclick="openSetlistModal();closeMenu()">🎵 Setlists</div>
   </div>
+  <div class="dd-sec">
+    <div class="dd-lbl">Application</div>
+    <div class="dd-item" onclick="rdrClearCache();closeMenu()" title="Force le rechargement de la dernière version de l'app — ne touche pas à tes setlists ni réglages">🧹 Vider le cache</div>
+  </div>
 </div>
 
 <!-- canvas-area original conservé plus bas, hors de la zone masquée -->
@@ -4238,6 +4242,55 @@ function closeMenu(){
   if(ov) ov.classList.remove('open');
   const dd=document.getElementById('dropdown');
   if(dd) dd.classList.remove('open');
+}
+// ════ DEBUG — diagnostic du ratio de page qui dérive selon la largeur ════
+// N'est JAMAIS appelée automatiquement : outil manuel, à lancer depuis la
+// console DevTools (F12 > Console > taper rdrDebugRatio() ).
+window.rdrDebugRatio=function(){
+  const ca=document.getElementById('canvas-area');
+  const pages=document.querySelectorAll('#canvas-area > .page, #canvas-area .page');
+  const [wMm,hMm]=FORMATS[currentFmt]||[0,0];
+  const out={
+    currentFmt, wMm, hMm, ratioAttendu:(hMm/wMm).toFixed(3),
+    pxPerMm,
+    windowInnerWidth:window.innerWidth, windowInnerHeight:window.innerHeight,
+    canvasAreaClientWidth:ca?ca.clientWidth:null,
+    nbPages:pages.length,
+  };
+  if(pages.length){
+    const p=pages[0];
+    out.pageStyleWidth=p.style.width;
+    out.pageStyleMinHeight=p.style.minHeight;
+    out.pageOffsetWidth=p.offsetWidth;
+    out.pageOffsetHeight=p.offsetHeight;
+    out.ratioReel=(p.offsetHeight/p.offsetWidth).toFixed(3);
+    out.pageTransform=p.style.transform;
+    const r=p.getBoundingClientRect();
+    out.pageRectWidth=Math.round(r.width);
+    out.pageRectHeight=Math.round(r.height);
+    out.ratioAffiche=(r.height/r.width).toFixed(3);
+  }
+  console.log('[rdrDebugRatio]');
+  console.table(out);
+  return out;
+};
+
+// Vide le cache technique de l'app (service worker + Cache Storage) pour
+// forcer le rechargement de la dernière version — ne touche jamais au
+// localStorage, donc jamais aux setlists ni aux réglages sauvegardés.
+async function rdrClearCache(){
+  if(!confirm('Vider le cache de l\'application ?\nTes setlists et réglages sauvegardés ne seront pas touchés — seuls les fichiers techniques de l\'app seront effacés, pour forcer le rechargement de la dernière version.\n\nL\'application va se recharger juste après.')) return;
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      for(const r of regs) await r.unregister();
+    }
+    if(window.caches && caches.keys){
+      const keys=await caches.keys();
+      for(const k of keys) await caches.delete(k);
+    }
+  }catch(e){ console.warn('[rdrClearCache] erreur pendant le nettoyage :',e); }
+  location.reload();
 }
 // ── Topbar masquée par défaut, prête pour un geste swipe-down ──
 function showTopbar(){ document.body.classList.add('rdr-topbar-visible'); }
@@ -20214,15 +20267,15 @@ function rdrScalePages(){
   const vw=window.innerWidth;
   const vh=window.innerHeight;
   _rdrPages.forEach(p=>{
-    // Taille RÉELLEMENT rendue de la page — offsetWidth/offsetHeight ne sont
-    // jamais affectés par un transform CSS déjà en place (contrairement à
-    // getBoundingClientRect), donc fiables même si un scale précédent est
-    // encore appliqué. On n'utilise plus min-height : cette propriété ne
-    // donne qu'un minimum, que le contenu réel peut dépasser, ce qui
-    // faussait légèrement le ratio et pouvait réduire le zoom plus que
-    // nécessaire.
-    const pageW=p.offsetWidth||794;
-    const pageH=p.offsetHeight||1123;
+    // On lit la taille depuis le style inline (fixée pendant reflow), PAS
+    // depuis offsetWidth/offsetHeight : au moment où cette fonction
+    // s'exécute, les pages sont en display:none (une seule page visible à
+    // la fois), ce qui ramène toujours offsetWidth/offsetHeight à 0 et
+    // faisait retomber le calcul sur une valeur de secours arbitraire
+    // (794×1123, un gabarit A4 approximatif) — d'où un zoom plus petit que
+    // nécessaire, sans rapport avec la vraie taille de la page.
+    const pageW=parseFloat(p.style.width)||794;
+    const pageH=parseFloat(p.style.minHeight)||1123;
     // Ajuster aux deux dimensions — pas de troncature, page centrée
     const scale=Math.min(vw/pageW, vh/pageH);
     p.style.transform=`translate(-50%,-50%) scale(${scale})`;
