@@ -699,11 +699,8 @@ body.rdr-topbar-visible #topbar{transform:translateY(0)}
 .chord-cell{flex:1;display:flex;align-items:center;justify-content:flex-start;
   padding-left:0;height:100%;min-width:0;position:relative;overflow:visible;}
 .chord-cell+.chord-cell::before{content:'';position:absolute;left:0;top:15%;bottom:15%;
-  width:1px;background:var(--rule2)}
-@media print{
-  .chord-cell+.chord-cell::before{display:none}
-  body.print-slot-bar .chord-cell+.chord-cell::before{display:block}
-}
+  width:1px;background:var(--rule2);display:none}
+body.print-slot-bar .chord-cell+.chord-cell::before{display:block}
 .chord-text{font-family:var(--typo-chord-family);font-size:var(--chord-auto-size);
   font-weight:var(--typo-chord-weight);white-space:nowrap;color:var(--ink);
   user-select:none;line-height:1;
