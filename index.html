@@ -4100,7 +4100,7 @@ function computePPM(){
     // Échelle FIXE pour le calcul de la mise en page (indépendante de
     // l'appareil) — la même mise en page (mêmes sauts de ligne/page) doit
     // apparaître sur tous les écrans ; seul le zoom visuel (voir
-    // applyScreenFitScale) s'adapte ensuite à la taille réelle de l'écran.
+    // rdrScalePages) s'adapte ensuite à la taille réelle de l'écran.
     // Avant ce correctif, ce facteur dépendait de la largeur de la fenêtre
     // (borné entre 1.5 et 3.8) : sur un écran étroit, il tombait plus bas,
     // et les éléments de mise en page définis en pixels fixes (hauteur de
@@ -4128,39 +4128,6 @@ function applyPrintScale(){
     p.style.transformOrigin='top left';
     p.style.transform=`scale(${scale})`;
     // Compenser la hauteur perdue par le scale
-    p.style.marginBottom=`${(pageW*scale - pageW) + 16}px`;
-  });
-  ca.style.overflowX='hidden';
-}
-
-// Équivalent de applyPrintScale() pour l'affichage à l'écran (hors
-// impression) : la mise en page est déjà calculée à l'échelle fixe définie
-// dans computePPM() — ici on se contente de zoomer visuellement le résultat
-// pour qu'il tienne dans la largeur disponible, sans jamais recalculer la
-// pagination elle-même. Ne réduit jamais en dessous de ce qu'il faut, et ne
-// grossit jamais au-delà de la taille d'origine (comme à l'impression).
-function applyScreenFitScale(){
-  if(_printMode) return;
-  const ca=document.getElementById('canvas-area');
-  if(!ca) return;
-  const pages=ca.querySelectorAll('.page');
-  if(!pages.length) return;
-  const pageW=pages[0].offsetWidth;
-  const screenW=ca.clientWidth-32;
-  const scale=Math.min(1, screenW/pageW);
-  if(scale>=1){
-    // Tient déjà à l'écran sans zoom — pas besoin de transform.
-    ca.style.alignItems='';
-    ca.style.paddingLeft='';
-    pages.forEach(p=>{ p.style.transform=''; p.style.transformOrigin=''; p.style.marginBottom=''; });
-    ca.style.overflowX='';
-    return;
-  }
-  ca.style.alignItems='flex-start';
-  ca.style.paddingLeft='16px';
-  pages.forEach(p=>{
-    p.style.transformOrigin='top left';
-    p.style.transform=`scale(${scale})`;
     p.style.marginBottom=`${(pageW*scale - pageW) + 16}px`;
   });
   ca.style.overflowX='hidden';
@@ -17277,7 +17244,6 @@ function reflow(){
     renderAllNotations();
     applyFitChords();
     if(_printMode) applyPrintScale();
-    else applyScreenFitScale();
     // ── Mode Reader : passer en vue pleine page ──
     rdrInitPages();
   });
@@ -20249,8 +20215,15 @@ function rdrScalePages(){
   const vw=window.innerWidth;
   const vh=window.innerHeight;
   _rdrPages.forEach(p=>{
-    const pageW=parseFloat(p.style.width)||794;
-    const pageH=parseFloat(p.style.minHeight)||1123;
+    // Taille RÉELLEMENT rendue de la page — offsetWidth/offsetHeight ne sont
+    // jamais affectés par un transform CSS déjà en place (contrairement à
+    // getBoundingClientRect), donc fiables même si un scale précédent est
+    // encore appliqué. On n'utilise plus min-height : cette propriété ne
+    // donne qu'un minimum, que le contenu réel peut dépasser, ce qui
+    // faussait légèrement le ratio et pouvait réduire le zoom plus que
+    // nécessaire.
+    const pageW=p.offsetWidth||794;
+    const pageH=p.offsetHeight||1123;
     // Ajuster aux deux dimensions — pas de troncature, page centrée
     const scale=Math.min(vw/pageW, vh/pageH);
     p.style.transform=`translate(-50%,-50%) scale(${scale})`;
