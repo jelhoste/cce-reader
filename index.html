@@ -325,6 +325,8 @@ body.rdr-topbar-visible #topbar{transform:translateY(0)}
   font-weight:var(--typo-title-weight);color:var(--ink);line-height:1.1;white-space:pre-wrap}
 .ph-title[onclick]:hover{opacity:.75}
 .ph-sub{font-size:.85rem;color:var(--ink2);margin-top:.1rem;font-family:var(--font-body);white-space:pre-wrap}
+.ph-composer{font-size:var(--typo-composer-size,.85rem)}
+.ph-arranger{font-size:var(--typo-arranger-size,.85rem)}
 .ph-tag[onclick]:hover{opacity:.75;border-color:var(--accent)}
 .ph-tags{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.22rem}
 .ph-tag{font-family:var(--font-mono);font-size:.58rem;background:var(--ui);border:1px solid var(--rule);
@@ -5293,7 +5295,7 @@ function renderLyricsPage(v){
     hdr.className='page-header';
     hdr.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
       <div class="ph-title" onclick="lyricsCleanup();openTypo();typoTab('proprietes')" title="Modifier les propriétés" style="cursor:pointer">${s.title||'Sans titre'}</div>
-      ${s.composer?`<span class="ph-sub">${s.composer}</span>`:''}
+      ${s.composer?`<span class="ph-sub ph-composer">${s.composer}</span>`:''}
     </div>
     <div class="ph-tags">
       ${s.key?`<span class="ph-tag">Ton. <b>${(state.transposeDisplay&&state.transposeDisplay!==0)?transposeKey(s.key,state.transposeDisplay,state.transposeDisplayFlat||false):s.key}</b></span>`:''}
@@ -5873,7 +5875,7 @@ function renderDiagOnlyPage(v){
   hdr.className='page-header';
   hdr.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
     <div class="ph-title" onclick="openTypo();typoTab('proprietes')" title="Modifier les propriétés" style="cursor:pointer">${s.title||'Sans titre'}</div>
-    ${(s.composer)?`<span class="ph-sub">${s.composer}</span>`:''}
+    ${(s.composer)?`<span class="ph-sub ph-composer">${s.composer}</span>`:''}
   </div>
   <div class="ph-tags">
     ${s.key?`<span class="ph-tag">Ton. <b>${(state.transposeDisplay&&state.transposeDisplay!==0)?transposeKey(s.key,state.transposeDisplay,state.transposeDisplayFlat||false):s.key}</b></span>`:''}
@@ -16682,8 +16684,8 @@ function reflow(){
           <div class="ph-title" onclick="openTypo();typoTab('proprietes')" title="Modifier les propriétés" style="cursor:pointer">${s.title||'Sans titre'}</div>
           ${(s.composer||s.arranger)?`
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.1rem;flex-shrink:0;cursor:pointer" onclick="openTypo();typoTab('proprietes')" title="Modifier les propriétés">
-            ${s.composer?`<span class="ph-sub" style="margin-top:0">${s.composer}</span>`:''}
-            ${s.arranger?`<span class="ph-sub" style="margin-top:0;font-style:italic">${s.arranger}</span>`:''}
+            ${s.composer?`<span class="ph-sub ph-composer" style="margin-top:0">${s.composer}</span>`:''}
+            ${s.arranger?`<span class="ph-sub ph-arranger" style="margin-top:0;font-style:italic">${s.arranger}</span>`:''}
           </div>`:''}
         </div>
         <div class="ph-tags">
