@@ -20590,7 +20590,7 @@ function rdrRenderSetlistEditCards(){
     card.innerHTML=`<span style="font-family:var(--font-mono);font-size:.6rem;color:var(--ink3);min-width:18px;flex-shrink:0">${i+1}.</span>
       <span style="font-family:var(--font-mono);font-size:.66rem;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${track.title||'Sans titre'}</span>
       ${transpBadge}`;
-    card.addEventListener('click',e=>{ if(e.target.closest('.rdr-sle-reorder')) return; if(_rdrCardDragJustFired) return; rdrGoToTrack(i); closeSetlistEditModal(); });
+    card.addEventListener('click',e=>{ if(_rdrCardDragJustFired) return; rdrGoToTrack(i); closeSetlistEditModal(); });
     card.addEventListener('contextmenu',e=>e.preventDefault());
     // Poignée dédiée pour le glisser (à gauche) : touch-action:none fixé dès
     // sa création, pas ajouté après coup — certains navigateurs ignorent un
@@ -20603,26 +20603,12 @@ function rdrRenderSetlistEditCards(){
     handle.textContent='⠿';
     handle.style.cssText=`flex-shrink:0;font-size:1.1rem;line-height:1;color:var(--ink3);
       padding:.3rem .4rem;cursor:grab;touch-action:none;
-      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none`;
-    handle.title='Maintenir pour réordonner';
+      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
+      opacity:${_rdrSetlistLocked?'.3':'1'}`;
+    handle.title=_rdrSetlistLocked?'Verrouillé — appui long sur le cadenas pour déverrouiller':'Maintenir pour réordonner';
     handle.addEventListener('pointerdown',e=>{ e.stopPropagation(); _rdrCardPointerDown(e,i,card); });
     handle.addEventListener('contextmenu',e=>e.preventDefault());
     card.insertBefore(handle,card.firstChild);
-    const reorderWrap=document.createElement('div');
-    reorderWrap.className='rdr-sle-reorder';
-    reorderWrap.style.cssText='display:flex;flex-direction:row;gap:4px;flex-shrink:0';
-    const upBtn=document.createElement('button');
-    upBtn.textContent='▲'; upBtn.disabled=i===0||_rdrSetlistLocked;
-    upBtn.style.cssText=`font-size:.9rem;line-height:1;padding:.4rem .55rem;border:1px solid var(--rule2);
-      border-radius:var(--r);background:var(--ui2);cursor:pointer;opacity:${(i===0||_rdrSetlistLocked)?'.3':'1'}`;
-    upBtn.addEventListener('click',e=>{ e.stopPropagation(); rdrMoveTrackSle(i,-1); });
-    const downBtn=document.createElement('button');
-    downBtn.textContent='▼'; downBtn.disabled=i===_rdrSetlist.tracks.length-1||_rdrSetlistLocked;
-    downBtn.style.cssText=`font-size:.9rem;line-height:1;padding:.4rem .55rem;border:1px solid var(--rule2);
-      border-radius:var(--r);background:var(--ui2);cursor:pointer;opacity:${(i===_rdrSetlist.tracks.length-1||_rdrSetlistLocked)?'.3':'1'}`;
-    downBtn.addEventListener('click',e=>{ e.stopPropagation(); rdrMoveTrackSle(i,1); });
-    reorderWrap.appendChild(upBtn); reorderWrap.appendChild(downBtn);
-    card.appendChild(reorderWrap);
     container.appendChild(card);
   });
   // Nombre de colonnes : mesuré APRÈS insertion (une seule colonne d'abord),
