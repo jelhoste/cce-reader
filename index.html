@@ -640,6 +640,11 @@ body.rdr-topbar-visible #topbar{transform:translateY(0)}
   line-height:1.3;letter-spacing:.03em;
   -webkit-print-color-adjust:exact;print-color-adjust:exact;
 }
+.sec-tempo-square{transition:none;background:var(--tempo-on-bg,currentColor)}
+.rdr-sle-card{transition:box-shadow .15s}
+.rdr-sle-card.rdr-sle-dragging{box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:grabbing}
+.rdr-sle-card.rdr-sle-drop-target{outline:2px dashed var(--accent);outline-offset:2px}
+.sec-tempo-square.tempo-off{background:var(--tempo-off-bg,transparent)}
 .sym-row{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end;margin-bottom:var(--ov-offset-sym)}
 .sym{
   font-family:var(--font-mono);font-size:var(--typo-sym-size);
@@ -1114,7 +1119,7 @@ textarea.fi{resize:vertical;min-height:40px}
   #topbar,#dropdown,.page-ctrl,.row-ctrl,.no-print,#pedline-modal,
   #typo-panel,#sym-panel,#annot-panel,#sec-panel,
   #chord-popup,#sec-editor,#quick-modal,#notation-panel,#freeblock-panel,#version-panel,
-  #mso-panel,#spacer-panel,#grilles-modal,#setlist-modal,#templates-modal,
+  #mso-panel,#spacer-panel,#grilles-modal,#setlist-modal,#templates-modal,#rdr-setlist-edit-modal,
   .modal-backdrop,.app-modal,#lyrics-panel{display:none!important}
   #canvas-area{display:block!important;padding:0!important;margin:0!important;
     background:white!important;overflow:visible!important}
@@ -1772,6 +1777,34 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
           <div class="rdr-toggle" id="rdr-tog-showSections"></div>
           <span class="rdr-toggle-label">Sections</span>
         </label>
+        <label class="rdr-toggle-row" onclick="rdrToggleOpt('showTempoTitles')" title="N'affecte que le carré clignotant — le texte du titre tempo reste toujours visible">
+          <div class="rdr-toggle" id="rdr-tog-showTempoTitles"></div>
+          <span class="rdr-toggle-label">Titres tempo (clignotant)</span>
+        </label>
+      </div>
+      <div id="rdr-tempo-square-settings">
+        <div class="rdr-menu-row">
+          <span class="rdr-menu-label">Durée allumé (%)</span>
+          <div class="rdr-stepper">
+            <button class="rdr-step-btn left" onclick="rdrTempoOnPctStep(-5)">−</button>
+            <input type="number" class="rdr-fi" id="rdr-menu-tempo-onpct" value="50" min="5" max="95" step="5" oninput="rdrApplyTempoOnPct(parseInt(this.value))">
+            <button class="rdr-step-btn right" onclick="rdrTempoOnPctStep(5)">+</button>
+          </div>
+          <span style="font-size:.55rem;color:var(--ink3)">le tempo ne change pas, seul le ratio allumé/éteint</span>
+        </div>
+        <div class="rdr-menu-row">
+          <span class="rdr-menu-label">Couleur allumé</span>
+          <input type="color" id="rdr-tempo-oncolor-pick" value="#cc2200" style="width:36px;height:24px;border:1px solid var(--rule2);border-radius:3px;cursor:pointer;padding:1px 2px;background:var(--ui2)" oninput="rdrApplyTempoOnColor(this.value)">
+          <button class="rdr-step-btn" onclick="rdrResetTempoOnColor()" title="Revenir à la couleur définie par section dans l'éditeur" style="font-size:.6rem;padding:0 .4rem">⟲</button>
+        </div>
+        <div class="rdr-menu-row">
+          <span class="rdr-menu-label">Couleur éteint (fond)</span>
+          <input type="color" id="rdr-tempo-offcolor-pick" value="#000000" style="width:36px;height:24px;border:1px solid var(--rule2);border-radius:3px;cursor:pointer;padding:1px 2px;background:var(--ui2)" oninput="rdrApplyTempoOffColor(this.value)">
+          <label style="display:flex;align-items:center;gap:.3rem;margin-left:.5rem;cursor:pointer">
+            <input type="checkbox" id="rdr-tempo-offcolor-transparent" onchange="rdrToggleTempoOffTransparent(this.checked)" style="width:16px;height:16px;cursor:pointer">
+            <span style="font-size:.55rem;color:var(--ink3)">Transparent</span>
+          </label>
+        </div>
       </div>
       <div class="rdr-menu-row">
         <label class="rdr-toggle-row" onclick="rdrToggleOpt('showRhythmNotation')">
@@ -1900,9 +1933,9 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
         <button id="rdr-setlist-lock-btn" class="rdr-mbtn"
           style="font-size:.65rem;padding:.3rem .6rem;display:flex;align-items:center;gap:.3rem;
           -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation"
-          title="Appui long pour verrouiller/déverrouiller l'ordre et les transpositions">🔓 Déverrouillé</button>
+          title="Appui long pour verrouiller/déverrouiller l'ordre et la transposition">🔒 Verrouillé</button>
       </div>
-      <div id="rdr-menu-tracklist" style="display:flex;flex-direction:column;gap:.25rem;max-height:35vh;overflow-y:auto"></div>
+      <button class="rdr-mbtn" onclick="openSetlistEditModal();closeMenu()" style="width:100%">✎ Éditer la setlist</button>
     </div>
     <hr class="rdr-menu-divider">
 
@@ -3911,6 +3944,18 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
 </div>
 
 <!-- ══ SETLIST EDITOR MODAL ══════════════════════════════ -->
+<div id="rdr-setlist-edit-modal" style="display:none;position:fixed;inset:0;z-index:990;background:var(--bg);flex-direction:column">
+  <div style="display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;border-bottom:1px solid var(--rule);flex-shrink:0">
+    <div id="rdr-sle-name" style="font-family:var(--font-mono);font-size:.75rem;font-weight:700;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <button id="rdr-sle-lock-btn" class="rdr-mbtn"
+      style="font-size:.65rem;padding:.4rem .7rem;display:flex;align-items:center;gap:.3rem;flex-shrink:0;
+      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation"
+      title="Appui long pour verrouiller/déverrouiller le réordonnancement">🔒 Verrouillé</button>
+    <button class="rdr-mbtn" onclick="closeSetlistEditModal()" style="flex-shrink:0;padding:.4rem .7rem">✕</button>
+  </div>
+  <div id="rdr-sle-list" style="flex:1;overflow-y:auto;padding:.7rem;column-gap:.6rem"></div>
+</div>
+
 <div id="setlist-editor-modal" style="display:none;position:fixed;inset:0;z-index:930;
   background:rgba(0,0,0,.45);align-items:center;justify-content:center">
   <div style="background:var(--modal-bg);border-radius:calc(var(--r)*2);box-shadow:0 8px 40px rgba(0,0,0,.3);
@@ -16822,32 +16867,54 @@ function reflow(){
         }
         if(m.section){
           const so=secObj(m.section);
-          const s=document.createElement('div');s.className='section-marker'+(so.style==='badge'?' badge':'');
+          const isBadge=so.style==='badge';
+          const s=document.createElement('div');s.className='section-marker'+(isBadge?' badge':'');
           s.innerHTML=so.text||'';
-          // Styles per-mesure
-          if(so.align){
-            // En mode badge : align-self suffit (width:fit-content conservé)
-            // En mode texte : width:100% + textAlign pour que le texte soit bien positionné
-            const isBadge=so.style==='badge';
-            s.style.alignSelf=so.align==='center'?'center':so.align==='right'?'flex-end':'flex-start';
-            if(!isBadge){
-              s.style.textAlign=so.align;
-              s.style.width='100%';
-            }
-          }
           if(so.size) s.style.fontSize=so.size+'px';
           if(so.weight) s.style.fontWeight=so.weight;
           if(so.fontStyle) s.style.fontStyle=so.fontStyle;
           if(so.font) s.style.fontFamily=so.font;
           if(so.color){
-            if(so.style==='badge'){ s.style.background=so.color; s.style.borderColor=so.color; }
+            if(isBadge){ s.style.background=so.color; s.style.borderColor=so.color; }
             else { s.style.color=so.color; }
           }
           if(so.offsetX||so.offsetY) s.style.transform=`translate(${so.offsetX||0}px,${so.offsetY||0}px)`;
           s.style.cursor='pointer';s.title='Cliquer pour modifier';
           s.addEventListener('click',e=>{e.stopPropagation();select(idx);openSecPanel(idx);});
           s.addEventListener('dblclick',e=>{e.stopPropagation();select(idx);openSecEditor(idx);});
-          ov.appendChild(s);
+
+          let mounted=s; // élément réellement ajouté à ov (s seul, ou un groupe titre+carré)
+          // Le titre reste TOUJOURS affiché — seul le carré clignotant est
+          // soumis au réglage "Titres tempo" (prefs.showTempoTitles).
+          if(so.tempo && prefs.showTempoTitles!==false){
+            const wrap=document.createElement('div');
+            wrap.style.cssText='display:inline-flex;align-items:center;gap:6px';
+            wrap.appendChild(s);
+            const sq=document.createElement('span');
+            sq.className='sec-tempo-square';
+            sq.dataset.tempo=so.tempo;
+            const sz=so.tempoSize||20;
+            sq.style.cssText=`display:inline-block;width:${sz}px;height:${sz}px;flex-shrink:0;border-radius:2px`;
+            sq.style.setProperty('--tempo-on-bg', prefs.tempoOnColor||so.tempoColor||so.color||'currentColor');
+            if(so.tempoOffsetX||so.tempoOffsetY) sq.style.transform=`translate(${so.tempoOffsetX||0}px,${so.tempoOffsetY||0}px)`;
+            sq.title=so.tempo+' BPM';
+            rdrStartTempoBlink();
+            wrap.appendChild(sq);
+            mounted=wrap;
+          }
+          if(so.align){
+            mounted.style.alignSelf=so.align==='center'?'center':so.align==='right'?'flex-end':'flex-start';
+            if(!isBadge){
+              if(mounted===s){
+                s.style.textAlign=so.align;
+                s.style.width='100%';
+              } else {
+                mounted.style.width='100%';
+                mounted.style.justifyContent=so.align==='center'?'center':so.align==='right'?'flex-end':'flex-start';
+              }
+            }
+          }
+          ov.appendChild(mounted);
         }
         if(m.symbols&&m.symbols.length){
           const sr=document.createElement('div');sr.className='sym-row';
@@ -19868,7 +19935,11 @@ document.addEventListener('keydown',e=>{
   },{passive:true});
 })();
 
-window.addEventListener('resize',()=>{ reflow(); rdrScalePages(); });
+window.addEventListener('resize',()=>{
+  reflow(); rdrScalePages();
+  const sleModal=document.getElementById('rdr-setlist-edit-modal');
+  if(sleModal && sleModal.style.display==='flex') rdrRenderSetlistEditCards();
+});
 window.addEventListener('beforeprint',()=>{
   closeAllModals();
   // NE PAS appeler setPrintMode/reflow ici — le CSS @media print gère l'impression
@@ -19972,6 +20043,8 @@ let prefs={
   showFreeBlocks:true, showMeasNums:false,
   showLyricsChords:true,
   showDiagBands:true, showScaleViewers:true,
+  showTempoTitles:true,
+  tempoOnPct:50, tempoOnColor:'', tempoOffColor:'', tempoOffTransparent:true,
   defaultVersionLyrics:false,
   metroBars:2, metroFlashPct:20, metroColor:'#e05540',
 };
@@ -20015,6 +20088,10 @@ function rdrToggleOpt(key){
     }
   }
   if(key!=='nightMode') reflow();
+  if(key==='showTempoTitles'){
+    if(prefs.showTempoTitles) rdrStartTempoBlink();
+    else rdrStopTempoBlink();
+  }
 }
 
 function rdrSyncToggles(){
@@ -20200,29 +20277,126 @@ function rdrStopMetro(){
   document.getElementById('rdr-metro-btn')?.classList.remove('active');
 }
 
-// ── Navigation Reader dans une setlist ────────────────────
+// ── Carrés de tempo clignotants (titres tempo) ─────────────
+// Même principe que le métronome (horloge AudioContext.currentTime, jamais
+// de setInterval) mais en calcul de PHASE à chaque frame plutôt qu'en
+// programmation de battements un par un : chaque carré déduit son état
+// allumé/éteint directement de l'heure absolue de l'horloge partagée, donc
+// sans dérive possible et sans repartir de zéro après une mise en arrière-
+// plan de l'onglet — et plusieurs tempos différents cohabitent sans aucune
+// interférence, chacun calculant sa propre phase indépendamment.
+let _rdrTempoBlinkRunning=false;
+async function rdrStartTempoBlink(){
+  if(!prefs.showTempoTitles) return;
+  if(!_rdrMetroCtx) _rdrMetroCtx=new (window.AudioContext||window.webkitAudioContext)();
+  try{ await _rdrMetroCtx.resume(); }catch(e){ /* pas encore de geste utilisateur — se corrigera au prochain tap */ }
+  if(_rdrTempoBlinkRunning) return;
+  _rdrTempoBlinkRunning=true;
+  requestAnimationFrame(rdrTempoBlinkTick);
+}
+function rdrStopTempoBlink(){
+  _rdrTempoBlinkRunning=false;
+}
+function rdrTempoBlinkTick(){
+  if(!_rdrTempoBlinkRunning || !prefs.showTempoTitles){ _rdrTempoBlinkRunning=false; return; }
+  const squares=document.querySelectorAll('.sec-tempo-square[data-tempo]');
+  if(squares.length && _rdrMetroCtx){
+    const t=_rdrMetroCtx.currentTime;
+    const onRatio=Math.max(0.05,Math.min(0.95,(prefs.tempoOnPct||50)/100));
+    squares.forEach(sq=>{
+      const bpm=parseFloat(sq.dataset.tempo)||120;
+      const phase=(t*bpm/60)%1;
+      sq.classList.toggle('tempo-off', phase>=onRatio);
+    });
+  }
+  requestAnimationFrame(rdrTempoBlinkTick);
+}
+
+// ── Réglages du carré de tempo (durée allumé, couleurs) ────
+function rdrTempoOnPctStep(delta){
+  const inp=document.getElementById('rdr-menu-tempo-onpct');
+  if(!inp) return;
+  const v=Math.max(5,Math.min(95,(parseInt(inp.value)||50)+delta));
+  inp.value=v;
+  rdrApplyTempoOnPct(v);
+}
+function rdrApplyTempoOnPct(v){
+  prefs.tempoOnPct=Math.max(5,Math.min(95,parseInt(v)||50));
+  const inp=document.getElementById('rdr-menu-tempo-onpct');
+  if(inp) inp.value=prefs.tempoOnPct;
+  // Pas besoin de reflow : le moteur de clignotement relit prefs.tempoOnPct
+  // à chaque frame, l'effet est donc immédiat.
+}
+// Couleur "allumé" : vide = utilise la couleur définie par section dans
+// l'éditeur (comportement d'origine, inchangé) ; sinon, remplace TOUS les
+// carrés par cette couleur unique. Nécessite un reflow, car la couleur est
+// injectée au moment du rendu (une par section, pas une variable globale).
+function rdrApplyTempoOnColor(v){
+  prefs.tempoOnColor=v||'';
+  reflow();
+}
+function rdrResetTempoOnColor(){
+  prefs.tempoOnColor='';
+  const inp=document.getElementById('rdr-tempo-oncolor-pick');
+  if(inp) inp.value='#cc2200';
+  reflow();
+}
+// Couleur "éteint" (fond) : appliquée via une variable CSS globale, donc
+// aucun reflow nécessaire — l'effet est immédiat sur tous les carrés,
+// allumés ou non.
+function rdrApplyTempoOffColor(v){
+  prefs.tempoOffColor=v||'';
+  prefs.tempoOffTransparent=false;
+  const chk=document.getElementById('rdr-tempo-offcolor-transparent');
+  if(chk) chk.checked=false;
+  document.documentElement.style.setProperty('--tempo-off-bg', v||'transparent');
+}
+function rdrToggleTempoOffTransparent(checked){
+  prefs.tempoOffTransparent=checked;
+  if(checked){
+    document.documentElement.style.setProperty('--tempo-off-bg','transparent');
+  } else {
+    const c=prefs.tempoOffColor||document.getElementById('rdr-tempo-offcolor-pick')?.value||'#000000';
+    document.documentElement.style.setProperty('--tempo-off-bg', c);
+  }
+}
+function rdrSyncTempoSquareSettings(){
+  const pctInp=document.getElementById('rdr-menu-tempo-onpct');
+  if(pctInp) pctInp.value=prefs.tempoOnPct||50;
+  const onInp=document.getElementById('rdr-tempo-oncolor-pick');
+  if(onInp) onInp.value=prefs.tempoOnColor||'#cc2200';
+  const offInp=document.getElementById('rdr-tempo-offcolor-pick');
+  if(offInp) offInp.value=prefs.tempoOffColor||'#000000';
+  const offChk=document.getElementById('rdr-tempo-offcolor-transparent');
+  if(offChk) offChk.checked=prefs.tempoOffTransparent!==false;
+  document.documentElement.style.setProperty('--tempo-off-bg', (prefs.tempoOffTransparent!==false)?'transparent':(prefs.tempoOffColor||'#000000'));
+}
 let _rdrSetlist=null;     // setlist actuellement ouverte en lecture
 let _rdrTrackIdx=0;       // index du morceau courant
-let _rdrSetlistLocked=false; // verrou ordre + transpositions (déverrouillé par défaut)
+let _rdrSetlistLocked=true; // verrou ordre + transposition (verrouillé par défaut)
 function rdrSyncLockBtn(){
+  const txt=_rdrSetlistLocked?'🔒 Verrouillé':'🔓 Déverrouillé';
   const btn=document.getElementById('rdr-setlist-lock-btn');
-  if(!btn) return;
-  btn.textContent=_rdrSetlistLocked?'🔒 Verrouillé':'🔓 Déverrouillé';
-  btn.classList.toggle('on',_rdrSetlistLocked);
+  if(btn){ btn.textContent=txt; btn.classList.toggle('on',_rdrSetlistLocked); }
+  const btn2=document.getElementById('rdr-sle-lock-btn');
+  if(btn2){ btn2.textContent=txt; btn2.classList.toggle('on',_rdrSetlistLocked); }
 }
 function rdrToggleSetlistLock(){
   _rdrSetlistLocked=!_rdrSetlistLocked;
   rdrSyncLockBtn();
   rdrRenderTracklist();
+  rdrRenderSetlistEditCards();
 }
 // Appui long (700ms) sur le bouton pour basculer le verrou — évite un
-// déverrouillage accidentel par un simple tap pendant un concert.
-(function(){
+// déverrouillage accidentel par un simple tap pendant un concert. Les deux
+// boutons (menu principal et modale d'édition) partagent le même verrou et
+// ont chacun leur propre détecteur d'appui long, câblés sur la même bascule.
+function _rdrWireLockLongPress(btnId){
   let timer=null, fired=false;
   const start=()=>{ fired=false; timer=setTimeout(()=>{ fired=true; rdrToggleSetlistLock(); },700); };
   const cancel=()=>{ clearTimeout(timer); };
   const init=()=>{
-    const btn=document.getElementById('rdr-setlist-lock-btn');
+    const btn=document.getElementById(btnId);
     if(!btn) return;
     btn.addEventListener('pointerdown',start);
     btn.addEventListener('pointerup',cancel);
@@ -20235,7 +20409,217 @@ function rdrToggleSetlistLock(){
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
   else init();
-})();
+}
+_rdrWireLockLongPress('rdr-setlist-lock-btn');
+_rdrWireLockLongPress('rdr-sle-lock-btn');
+
+// ── Modale plein écran : édition de la setlist (réordonnancement) ──
+function openSetlistEditModal(){
+  const modal=document.getElementById('rdr-setlist-edit-modal');
+  if(!modal) return;
+  const nameEl=document.getElementById('rdr-sle-name');
+  if(nameEl) nameEl.textContent=_rdrSetlist?.name||'Setlist';
+  modal.style.display='flex';
+  rdrSyncLockBtn();
+  rdrRenderSetlistEditCards();
+}
+function closeSetlistEditModal(){
+  const modal=document.getElementById('rdr-setlist-edit-modal');
+  if(modal) modal.style.display='none';
+}
+
+// Réordonne la setlist depuis la modale plein écran (indices, pas de
+// coordonnées — robuste, identique en principe aux flèches déjà existantes
+// pour la lecture, avec le même verrou partagé).
+function rdrMoveTrackSle(i,dir){
+  if(_rdrSetlistLocked) return;
+  if(!_rdrSetlist||!_rdrSetlist.tracks) return;
+  const j=i+dir; if(j<0||j>=_rdrSetlist.tracks.length) return;
+  rdrSyncCurrentTrackAdjustments();
+  [_rdrSetlist.tracks[i],_rdrSetlist.tracks[j]]=[_rdrSetlist.tracks[j],_rdrSetlist.tracks[i]];
+  if(_rdrTrackIdx===i) _rdrTrackIdx=j;
+  else if(_rdrTrackIdx===j) _rdrTrackIdx=i;
+  rdrRenderSetlistEditCards();
+}
+
+// ── Glisser-déposer (armé par appui long) pour réordonner les cartes ──
+// Complète les flèches ▲▼ (jamais retirées, toujours le moyen garanti) :
+// tant que le doigt n'est pas resté immobile assez longtemps, tout
+// mouvement est traité comme une intention de défilement normal, pas de
+// glisser — évite tout conflit avec le défilement de la liste. Ne s'active
+// jamais si la setlist est verrouillée.
+let _rdrDrag=null;
+let _rdrCardDragJustFired=false; // supprime le clic de navigation juste après un glisser armé
+const RDR_DRAG_HOLD_MS=400;
+const RDR_DRAG_SLOP_PX=10;
+
+function _rdrCardPointerDown(e,i,card){
+  if(_rdrSetlistLocked) return;
+  if(e.target.closest('.rdr-sle-reorder')) return; // pas sur les flèches
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  _rdrDrag={idx:i, card, armed:false, startX:e.clientX, startY:e.clientY, dropTarget:null, timer:null, pointerId:e.pointerId};
+  _rdrDrag.timer=setTimeout(()=>_rdrArmDrag(),RDR_DRAG_HOLD_MS);
+  card.addEventListener('pointermove',_rdrCardPointerMove);
+  card.addEventListener('pointerup',_rdrCardPointerUp);
+  card.addEventListener('pointercancel',_rdrCardPointerUp);
+}
+function _rdrArmDrag(){
+  if(!_rdrDrag) return;
+  _rdrDrag.armed=true;
+  _rdrDrag.card.classList.add('rdr-sle-dragging');
+  _rdrDrag.card.style.touchAction='none';
+  _rdrDrag.card.style.zIndex='10';
+  // Capture le pointeur SEULEMENT maintenant (pas dès pointerdown) : avant
+  // l'activation, on laisse le défilement natif fonctionner normalement.
+  // Une fois armé, ça garantit que les événements move/up continuent
+  // d'arriver ici même si le doigt sort de la zone d'origine de la carte —
+  // sans ça, certains navigateurs annulent le geste dès que le doigt bouge,
+  // ce qui donnait l'impression d'un relâchement immédiat.
+  try{ _rdrDrag.card.setPointerCapture(_rdrDrag.pointerId); }catch(err){}
+  if(navigator.vibrate){ try{ navigator.vibrate(15); }catch(err){} }
+}
+function _rdrCardPointerMove(e){
+  if(!_rdrDrag) return;
+  const dx=e.clientX-_rdrDrag.startX, dy=e.clientY-_rdrDrag.startY;
+  if(!_rdrDrag.armed){
+    if(Math.abs(dx)>RDR_DRAG_SLOP_PX||Math.abs(dy)>RDR_DRAG_SLOP_PX){
+      // Mouvement avant l'activation → intention de défilement, on annule
+      clearTimeout(_rdrDrag.timer);
+      _rdrCleanupDrag();
+    }
+    return;
+  }
+  e.preventDefault();
+  _rdrDrag.card.style.transform=`translate(${dx}px,${dy}px) scale(1.04)`;
+  const target=_rdrFindDropTarget(e.clientX,e.clientY);
+  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-drop-target'));
+  if(target && target!==_rdrDrag.card) target.classList.add('rdr-sle-drop-target');
+  _rdrDrag.dropTarget=target;
+}
+function _rdrCardPointerUp(e){
+  if(!_rdrDrag) return;
+  clearTimeout(_rdrDrag.timer);
+  const wasArmed=_rdrDrag.armed;
+  if(wasArmed){
+    e.preventDefault();
+    _rdrCardDragJustFired=true;
+    setTimeout(()=>{ _rdrCardDragJustFired=false; },50);
+    const dropTarget=_rdrDrag.dropTarget;
+    if(dropTarget && dropTarget!==_rdrDrag.card){
+      const fromIdx=_rdrDrag.idx;
+      const toIdx=parseInt(dropTarget.dataset.idx);
+      rdrSyncCurrentTrackAdjustments();
+      const [moved]=_rdrSetlist.tracks.splice(fromIdx,1);
+      _rdrSetlist.tracks.splice(toIdx,0,moved);
+      if(_rdrTrackIdx===fromIdx) _rdrTrackIdx=toIdx;
+      else if(fromIdx<_rdrTrackIdx && toIdx>=_rdrTrackIdx) _rdrTrackIdx--;
+      else if(fromIdx>_rdrTrackIdx && toIdx<=_rdrTrackIdx) _rdrTrackIdx++;
+    }
+  }
+  _rdrCleanupDrag();
+  rdrRenderSetlistEditCards();
+}
+function _rdrFindDropTarget(x,y){
+  const cards=document.querySelectorAll('.rdr-sle-card');
+  for(const c of cards){
+    if(c===_rdrDrag.card) continue;
+    const r=c.getBoundingClientRect();
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return c;
+  }
+  return null;
+}
+function _rdrCleanupDrag(){
+  if(_rdrDrag){
+    if(_rdrDrag.armed){ try{ _rdrDrag.card.releasePointerCapture(_rdrDrag.pointerId); }catch(err){} }
+    _rdrDrag.card.removeEventListener('pointermove',_rdrCardPointerMove);
+    _rdrDrag.card.removeEventListener('pointerup',_rdrCardPointerUp);
+    _rdrDrag.card.removeEventListener('pointercancel',_rdrCardPointerUp);
+    _rdrDrag.card.style.transform='';
+    _rdrDrag.card.style.zIndex='';
+    _rdrDrag.card.style.touchAction='';
+    _rdrDrag.card.classList.remove('rdr-sle-dragging');
+  }
+  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-drop-target'));
+  _rdrDrag=null;
+}
+
+// Construit les cartes, puis calcule le nombre de colonnes nécessaire
+// (1, 2 ou 3) pour que tout tienne dans la hauteur disponible, en
+// remplissant toujours une colonne complète avant de passer à la suivante
+// (ordre de lecture évident : 1-2-3 en haut de la 1ère colonne, etc.).
+function rdrRenderSetlistEditCards(){
+  const container=document.getElementById('rdr-sle-list');
+  if(!container) return;
+  container.style.columnCount='';
+  container.innerHTML='';
+  if(!_rdrSetlist||!_rdrSetlist.tracks||!_rdrSetlist.tracks.length){
+    container.innerHTML=`<div style="font-family:var(--font-mono);font-size:.65rem;color:var(--ink3);text-align:center;padding:2rem">
+      Aucune setlist ouverte.</div>`;
+    return;
+  }
+  _rdrSetlist.tracks.forEach((track,i)=>{
+    const card=document.createElement('div');
+    card.className='rdr-sle-card';
+    card.dataset.idx=i;
+    const isCurrent=i===_rdrTrackIdx;
+    card.style.cssText=`display:flex;align-items:center;gap:.5rem;padding:.55rem .7rem;margin-bottom:.5rem;
+      break-inside:avoid;-webkit-column-break-inside:avoid;
+      border:1px solid ${isCurrent?'var(--accent)':'var(--rule)'};border-radius:var(--r);
+      background:${isCurrent?'color-mix(in srgb,var(--accent) 12%,var(--ui))':'var(--ui)'};
+      cursor:pointer;min-height:44px;box-sizing:border-box;position:relative;
+      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation`;
+    const transp=track.data?.state?.transposeDisplay||0;
+    const transpBadge=transp?`<span style="font-family:var(--font-mono);font-size:.55rem;color:var(--accent);
+      border:1px solid var(--accent);border-radius:3px;padding:.05rem .3rem;flex-shrink:0" title="Transposition enregistrée">${transp>0?'+':''}${transp}</span>`:'';
+    card.innerHTML=`<span style="font-family:var(--font-mono);font-size:.6rem;color:var(--ink3);min-width:18px;flex-shrink:0">${i+1}.</span>
+      <span style="font-family:var(--font-mono);font-size:.66rem;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${track.title||'Sans titre'}</span>
+      ${transpBadge}`;
+    card.addEventListener('click',e=>{ if(e.target.closest('.rdr-sle-reorder')) return; if(_rdrCardDragJustFired) return; rdrGoToTrack(i); closeSetlistEditModal(); });
+    card.addEventListener('contextmenu',e=>e.preventDefault());
+    // Poignée dédiée pour le glisser (à gauche) : touch-action:none fixé dès
+    // sa création, pas ajouté après coup — certains navigateurs ignorent un
+    // changement de touch-action fait en cours de geste, ce qui empêchait le
+    // déplacement même une fois le glisser "armé". En partant d'une poignée
+    // qui a toujours eu ce réglage, le navigateur ne tente jamais de gérer
+    // le geste comme un défilement dès le premier contact sur cette zone.
+    const handle=document.createElement('div');
+    handle.className='rdr-sle-handle';
+    handle.textContent='⠿';
+    handle.style.cssText=`flex-shrink:0;font-size:1.1rem;line-height:1;color:var(--ink3);
+      padding:.3rem .4rem;cursor:grab;touch-action:none;
+      -webkit-touch-callout:none;-webkit-user-select:none;user-select:none`;
+    handle.title='Maintenir pour réordonner';
+    handle.addEventListener('pointerdown',e=>{ e.stopPropagation(); _rdrCardPointerDown(e,i,card); });
+    handle.addEventListener('contextmenu',e=>e.preventDefault());
+    card.insertBefore(handle,card.firstChild);
+    const reorderWrap=document.createElement('div');
+    reorderWrap.className='rdr-sle-reorder';
+    reorderWrap.style.cssText='display:flex;flex-direction:row;gap:4px;flex-shrink:0';
+    const upBtn=document.createElement('button');
+    upBtn.textContent='▲'; upBtn.disabled=i===0||_rdrSetlistLocked;
+    upBtn.style.cssText=`font-size:.9rem;line-height:1;padding:.4rem .55rem;border:1px solid var(--rule2);
+      border-radius:var(--r);background:var(--ui2);cursor:pointer;opacity:${(i===0||_rdrSetlistLocked)?'.3':'1'}`;
+    upBtn.addEventListener('click',e=>{ e.stopPropagation(); rdrMoveTrackSle(i,-1); });
+    const downBtn=document.createElement('button');
+    downBtn.textContent='▼'; downBtn.disabled=i===_rdrSetlist.tracks.length-1||_rdrSetlistLocked;
+    downBtn.style.cssText=`font-size:.9rem;line-height:1;padding:.4rem .55rem;border:1px solid var(--rule2);
+      border-radius:var(--r);background:var(--ui2);cursor:pointer;opacity:${(i===_rdrSetlist.tracks.length-1||_rdrSetlistLocked)?'.3':'1'}`;
+    downBtn.addEventListener('click',e=>{ e.stopPropagation(); rdrMoveTrackSle(i,1); });
+    reorderWrap.appendChild(upBtn); reorderWrap.appendChild(downBtn);
+    card.appendChild(reorderWrap);
+    container.appendChild(card);
+  });
+  // Nombre de colonnes : mesuré APRÈS insertion (une seule colonne d'abord),
+  // à partir de la hauteur réelle d'une carte et de l'espace disponible.
+  const cards=container.querySelectorAll('.rdr-sle-card');
+  if(cards.length){
+    const cardH=cards[0].offsetHeight+8; // + marge basse
+    const availH=container.clientHeight||1;
+    const rowsPerCol=Math.max(1,Math.floor(availH/cardH));
+    const neededCols=Math.min(3,Math.max(1,Math.ceil(cards.length/rowsPerCol)));
+    container.style.columnCount=neededCols;
+  }
+}
 
 // ── Système pleine page ───────────────────────────────────
 let _rdrPages=[];       // tableau des éléments .page générés par reflow
@@ -20513,6 +20897,7 @@ function rdrSyncMenu(){
   rdrSyncToggles();
   rdrSyncTransposeUI();
   rdrSyncMetro();
+  rdrSyncTempoSquareSettings();
   rdrSyncLockBtn();
   rdrRenderTracklist();
   rdrSyncChordsToggle();
