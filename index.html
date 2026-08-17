@@ -20532,6 +20532,14 @@ function _rdrCardPointerUp(e){
       if(_rdrTrackIdx===fromIdx) _rdrTrackIdx=toIdx;
       else if(fromIdx<_rdrTrackIdx && toIdx>=_rdrTrackIdx) _rdrTrackIdx--;
       else if(fromIdx>_rdrTrackIdx && toIdx<=_rdrTrackIdx) _rdrTrackIdx++;
+      // Enregistrement automatique après un glisser réussi — seulement si
+      // cette setlist a un identifiant persistant (déjà enregistrée dans le
+      // navigateur) ; une setlist tout juste ouverte depuis un fichier n'a
+      // rien à écraser en local tant qu'elle n'a jamais été sauvegardée.
+      if(_rdrSetlist.id){
+        _rdrSetlist.savedAt=Date.now();
+        try{ localStorage.setItem(SETLIST_PREFIX+_rdrSetlist.id, JSON.stringify(_rdrSetlist)); }catch(err){}
+      }
     }
   }
   _rdrCleanupDrag();
