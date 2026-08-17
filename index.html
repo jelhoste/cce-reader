@@ -645,7 +645,8 @@ body.rdr-topbar-visible #topbar{transform:translateY(0)}
 .sec-tempo-square{transition:none;background:var(--tempo-on-bg,currentColor)}
 .rdr-sle-card{transition:box-shadow .15s}
 .rdr-sle-card.rdr-sle-dragging{box-shadow:0 10px 28px rgba(0,0,0,.4);cursor:grabbing}
-.rdr-sle-card.rdr-sle-drop-target{outline:2px dashed var(--accent);outline-offset:2px}
+.rdr-sle-card.rdr-sle-insert-before{border-top:3px solid var(--accent)!important}
+.rdr-sle-card.rdr-sle-insert-after{border-bottom:3px solid var(--accent)!important}
 .sec-tempo-square.tempo-off{background:var(--tempo-off-bg,transparent)}
 .sym-row{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end;margin-bottom:var(--ov-offset-sym)}
 .sym{
@@ -20507,10 +20508,10 @@ function _rdrCardPointerMove(e){
   }
   e.preventDefault();
   _rdrDrag.card.style.transform=`translate(${dx}px,${dy}px) scale(1.04)`;
-  const target=_rdrFindDropTarget(e.clientX,e.clientY);
-  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-drop-target'));
-  if(target && target!==_rdrDrag.card) target.classList.add('rdr-sle-drop-target');
-  _rdrDrag.dropTarget=target;
+  const drop=_rdrFindDropTarget(e.clientX,e.clientY);
+  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-insert-before','rdr-sle-insert-after'));
+  if(drop) drop.card.classList.add(drop.before?'rdr-sle-insert-before':'rdr-sle-insert-after');
+  _rdrDrag.drop=drop;
 }
 function _rdrCardPointerUp(e){
   if(!_rdrDrag) return;
@@ -20520,12 +20521,13 @@ function _rdrCardPointerUp(e){
     e.preventDefault();
     _rdrCardDragJustFired=true;
     setTimeout(()=>{ _rdrCardDragJustFired=false; },50);
-    const dropTarget=_rdrDrag.dropTarget;
-    if(dropTarget && dropTarget!==_rdrDrag.card){
+    const drop=_rdrDrag.drop;
+    if(drop && drop.card!==_rdrDrag.card){
       const fromIdx=_rdrDrag.idx;
-      const toIdx=parseInt(dropTarget.dataset.idx);
+      let toIdx=parseInt(drop.card.dataset.idx)+(drop.before?0:1);
       rdrSyncCurrentTrackAdjustments();
       const [moved]=_rdrSetlist.tracks.splice(fromIdx,1);
+      if(toIdx>fromIdx) toIdx--; // la suppression au-dessus décale les index qui suivent
       _rdrSetlist.tracks.splice(toIdx,0,moved);
       if(_rdrTrackIdx===fromIdx) _rdrTrackIdx=toIdx;
       else if(fromIdx<_rdrTrackIdx && toIdx>=_rdrTrackIdx) _rdrTrackIdx--;
@@ -20535,12 +20537,18 @@ function _rdrCardPointerUp(e){
   _rdrCleanupDrag();
   rdrRenderSetlistEditCards();
 }
+// Renvoie {card, before} : before=true si le point est dans la moitié
+// supérieure de la carte visée (insertion AU-DESSUS), false si dans la
+// moitié inférieure (insertion EN DESSOUS) — matérialisé par une ligne
+// horizontale entre deux morceaux, à l'endroit précis de l'insertion.
 function _rdrFindDropTarget(x,y){
   const cards=document.querySelectorAll('.rdr-sle-card');
   for(const c of cards){
     if(c===_rdrDrag.card) continue;
     const r=c.getBoundingClientRect();
-    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return c;
+    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom){
+      return {card:c, before:(y-r.top)<r.height/2};
+    }
   }
   return null;
 }
@@ -20555,7 +20563,7 @@ function _rdrCleanupDrag(){
     _rdrDrag.card.style.touchAction='';
     _rdrDrag.card.classList.remove('rdr-sle-dragging');
   }
-  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-drop-target'));
+  document.querySelectorAll('.rdr-sle-card').forEach(c=>c.classList.remove('rdr-sle-insert-before','rdr-sle-insert-after'));
   _rdrDrag=null;
 }
 
@@ -20592,7 +20600,7 @@ function rdrRenderSetlistEditCards(){
       ${transpBadge}`;
     card.addEventListener('click',e=>{ if(_rdrCardDragJustFired) return; rdrGoToTrack(i); closeSetlistEditModal(); });
     card.addEventListener('contextmenu',e=>e.preventDefault());
-    // Poignée dédiée pour le glisser (à gauche) : touch-action:none fixé dès
+    // Poignée dédiée pour le glisser (à droite) : touch-action:none fixé dès
     // sa création, pas ajouté après coup — certains navigateurs ignorent un
     // changement de touch-action fait en cours de geste, ce qui empêchait le
     // déplacement même une fois le glisser "armé". En partant d'une poignée
@@ -20608,7 +20616,7 @@ function rdrRenderSetlistEditCards(){
     handle.title=_rdrSetlistLocked?'Verrouillé — appui long sur le cadenas pour déverrouiller':'Maintenir pour réordonner';
     handle.addEventListener('pointerdown',e=>{ e.stopPropagation(); _rdrCardPointerDown(e,i,card); });
     handle.addEventListener('contextmenu',e=>e.preventDefault());
-    card.insertBefore(handle,card.firstChild);
+    card.appendChild(handle);
     container.appendChild(card);
   });
   // Nombre de colonnes : mesuré APRÈS insertion (une seule colonne d'abord),
