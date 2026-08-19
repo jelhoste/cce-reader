@@ -20781,10 +20781,27 @@ function rdrShowLoadScreen(){
 function rdrSaveRecent(name, jsonStr){
   try{
     const recents=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
-    const entry={name, ts:Date.now(), data:jsonStr.slice(0,500000)};
+    // Ne JAMAIS tronquer : du JSON coupé à une position arbitraire n'est
+    // plus un JSON valide, ce qui provoquait une erreur au moment de
+    // rouvrir ce morceau depuis "Récents" (l'ancien code coupait à
+    // 500 000 caractères, corrompant tout fichier plus volumineux).
+    const entry={name, ts:Date.now(), data:jsonStr};
     const filtered=recents.filter(r=>r.name!==name);
     filtered.unshift(entry);
-    localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(filtered.slice(0,5)));
+    // Si le stockage est plein (fichiers volumineux, ou déjà beaucoup de
+    // récents enregistrés), on réduit progressivement le nombre de
+    // morceaux gardés plutôt que d'échouer ou de stocker une donnée
+    // partielle/corrompue.
+    let toKeep=5, saved=false;
+    while(toKeep>0 && !saved){
+      try{
+        localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(filtered.slice(0,toKeep)));
+        saved=true;
+      }catch(quotaErr){
+        toKeep--;
+      }
+    }
+    if(!saved){ try{ localStorage.removeItem(RDR_RECENT_KEY); }catch(e){} }
     rdrRenderRecents();
   }catch(e){}
 }
@@ -20817,7 +20834,17 @@ function rdrRenderRecents(){
         try{
           const data=JSON.parse(r.data);
           rdrLoadData(data, r.name);
-        }catch(e){ alert('Erreur : '+e.message); }
+        }catch(e){
+          // Entrée corrompue (probablement héritée de l'ancien bug de
+          // troncature) : on la retire silencieusement plutôt que de
+          // laisser l'utilisateur retomber dessus indéfiniment.
+          try{
+            const cur=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
+            localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(cur.filter(x=>x.name!==r.name)));
+          }catch(cleanupErr){}
+          rdrRenderRecents();
+          alert('Ce morceau récent était corrompu (probablement à cause d\'un ancien bug) et a été retiré de la liste. Rouvre-le depuis son fichier ou sa setlist.');
+        }
       };
       list.appendChild(d);
     });
