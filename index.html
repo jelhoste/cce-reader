@@ -20791,8 +20791,10 @@ function rdrSaveRecent(name, jsonStr){
     // Si le stockage est plein (fichiers volumineux, ou déjà beaucoup de
     // récents enregistrés), on réduit progressivement le nombre de
     // morceaux gardés plutôt que d'échouer ou de stocker une donnée
-    // partielle/corrompue.
-    let toKeep=5, saved=false;
+    // partielle/corrompue. Si même un seul morceau ne tient pas, on laisse
+    // la liste précédente intacte plutôt que de la vider — mieux vaut
+    // garder ce qu'il y avait avant que de tout perdre.
+    let toKeep=Math.min(5,filtered.length), saved=false;
     while(toKeep>0 && !saved){
       try{
         localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(filtered.slice(0,toKeep)));
@@ -20801,7 +20803,7 @@ function rdrSaveRecent(name, jsonStr){
         toKeep--;
       }
     }
-    if(!saved){ try{ localStorage.removeItem(RDR_RECENT_KEY); }catch(e){} }
+    if(!saved) console.warn('[rdrSaveRecent] pas assez de place pour garder ce morceau dans Récents — liste précédente conservée telle quelle.');
     rdrRenderRecents();
   }catch(e){}
 }
