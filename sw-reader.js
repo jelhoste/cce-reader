@@ -2,7 +2,7 @@
 // IMPORTANT : incrémenter CACHE_VERSION à chaque nouvelle mise en ligne
 // de cce-reader-v2-7.html, sinon les utilisateurs ayant installé
 // l'app continueront de voir l'ancienne version en cache.
-const CACHE_VERSION = 'cce-reader-v17';
+const CACHE_VERSION = 'cce-reader-v18';
 const PRECACHE_URLS = [
   './index.html',
   './manifest-reader.json',
