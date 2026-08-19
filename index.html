@@ -11462,6 +11462,7 @@ function renderDrumsInto(svg,m,W,interactive,zoom,showClef=true,SP=1.0){
   const minLP=drumMinLP(m);
   const maxLP=drumMaxLP(m);
   const H=drumStaffH(zoom,zoom?null:minLP,zoom?null:maxLP);
+  if(n.simile){ renderNotationSimile(svg,m,W,H/2,lg/9); return; }
   const NR=drumNR(zoom);
   const STEM_LEN=3.5*lg;
   const slots=n.slots||[];
@@ -12066,6 +12067,7 @@ function renderTrebleInto(parent, m, W, selectable, CY, LG, startX, nr, spacingS
   const n=m.notation; if(!n) return;
   const LG_REF=12;
   const scale=LG/LG_REF;
+  if(n.simile){ renderNotationSimile(parent,m,W,CY,scale); return; }
   const NR=(nr||5)*scale;
   const SP=spacingScale||1.0;
   const slots=n.slots||[];
@@ -13786,6 +13788,42 @@ function svgEl(tag,attrs){
   return el;
 }
 
+// ════ NOTATION : simile / double simile (lecture seule) ═════════
+// Reprend EXACTEMENT les coordonnées du glyphe simile des grilles d'accords
+// (_similesvg, viewBox 60×60, centré sur 30,30) via un <g transform>, pour
+// un rendu garanti identique à l'Éditeur.
+function _drawSimileGlyphAt(g, cx, cy, scale, dbl, col){
+  col=col||'var(--ink)';
+  const wrap=svgEl('g',{transform:`translate(${cx},${cy}) scale(${scale}) translate(-30,-30)`});
+  g.appendChild(wrap);
+  const r=3.8;
+  const mkSlash=(dx)=>svgEl('polygon',{points:
+    `${45.5+dx},10 ${54.5+dx},10 ${14.5+dx},50 ${5.5+dx},50`, fill:col});
+  if(dbl){
+    wrap.appendChild(svgEl('circle',{cx:18,cy:18,r,fill:col}));
+    wrap.appendChild(svgEl('circle',{cx:42,cy:42,r,fill:col}));
+    wrap.appendChild(mkSlash(-7));
+    wrap.appendChild(mkSlash(7));
+  } else {
+    wrap.appendChild(svgEl('circle',{cx:19,cy:19,r,fill:col}));
+    wrap.appendChild(svgEl('circle',{cx:41,cy:41,r,fill:col}));
+    wrap.appendChild(mkSlash(0));
+  }
+}
+// Simple : centré dans la mesure. Double : à la toute fin de la mesure
+// (frontière avec la mesure suivante qu'il répète aussi) — W représente la
+// largeur d'une seule mesure, pas des deux combinées. Taille réduite à 52%
+// pour cet usage précis (zones de notation), comme dans l'Éditeur.
+const NOTATION_SIMILE_SCALE=0.52;
+function renderNotationSimile(svg, m, W, cy, scale){
+  const g=svgEl('g',{'pointer-events':'none'});
+  svg.appendChild(g);
+  const dbl=m.notation.simile===2;
+  const cx=dbl?W:W/2;
+  _drawSimileGlyphAt(g, cx, cy, (scale||1)*NOTATION_SIMILE_SCALE, dbl, 'var(--ink)');
+  return g;
+}
+
 // ── Glyphes de notes (SVG paths normalisés, centre à 0,0) ──
 // Tête de note pleine (noire, croche, double croche, triple croche)
 function drawParen(x,y,r,col){
@@ -14042,6 +14080,7 @@ function renderRhythmInto(svg, m, W, interactive){
   const NOTE_Y=Math.round(38*_rsc);
   const STEM_DOWN=NOTE_Y+Math.round(26*_rsc); // bout de hampe bas + marge
   const H=Math.max(Math.round(NOTATION_H.rhythm*_rsc), STEM_DOWN+2);
+  if(n.simile){ renderNotationSimile(svg,m,W,H/2,_rsc); return; }
   const STEM_UP=NOTE_Y-Math.round(24*_rsc);
   const NR=Math.round(5*_rsc);
   const slots=n.slots||[];
@@ -14876,6 +14915,7 @@ function renderTabInto(parent, m, W, interactive, type, SP=1.0, lgOverride=null,
   const lg=lgOverride!==null?lgOverride:tabLGval(type);
   const nStr=tabStringCount(type);
   const H=tabStaffH(lg,nStr);
+  if(n.simile){ renderNotationSimile(parent,m,W,H/2,lg/9); return; }
   const slots=n.slots||[];
   const nSlots=slots.length||(n.beats||4);
   const CLEF_W=interactive?22:16;
@@ -16960,6 +17000,7 @@ function reflow(){
           if(ao.align) a.style.textAlign=ao.align;
           if(ao.color) a.style.color=ao.color;
           if(ao.offsetX||ao.offsetY) a.style.transform=`translate(${ao.offsetX||0}px,${ao.offsetY||0}px)`;
+          if(ao.overflow){ a.style.whiteSpace='nowrap'; a.style.zIndex='6'; a.style.width='max-content'; }
           a.style.cursor='text';a.title='Cliquer pour modifier';
           a.addEventListener('click',e=>{e.stopPropagation();select(idx);openAnnotPanel(idx);});
           ov.appendChild(a);
