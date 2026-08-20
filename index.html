@@ -20929,19 +20929,32 @@ function rdrLoadData(data, name){
 }
 
 // Listener pour l'input fichier de l'écran d'accueil
-document.getElementById('rdr-load-input')?.addEventListener('change',function(e){
-  const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    try{
-      const data=JSON.parse(ev.target.result);
-      rdrLoadData(data, file.name.replace(/\.[^.]+$/,''));
-      rdrSaveRecent(file.name.replace(/\.[^.]+$/,''), ev.target.result);
-    }catch(err){ alert('Erreur import : '+err.message); }
-  };
-  reader.readAsText(file);
-  e.target.value='';
-});
+(function(){
+  const inputEl=document.getElementById('rdr-load-input');
+  if(!inputEl){ console.warn('[trace] élément rdr-load-input introuvable dans le DOM !'); return; }
+  console.warn('[trace] listener posé sur rdr-load-input');
+  inputEl.addEventListener('change',function(e){
+    console.warn('[trace] change déclenché sur rdr-load-input');
+    const file=e.target.files[0];
+    if(!file){ console.warn('[trace] aucun fichier sélectionné (e.target.files vide)'); return; }
+    console.warn('[trace] fichier choisi :', file.name, '— taille :', file.size);
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      console.warn('[trace] FileReader.onload déclenché, longueur lue :', ev.target.result.length);
+      try{
+        const data=JSON.parse(ev.target.result);
+        console.warn('[trace] JSON.parse réussi, appel de rdrLoadData…');
+        rdrLoadData(data, file.name.replace(/\.[^.]+$/,''));
+        console.warn('[trace] rdrLoadData terminée, appel de rdrSaveRecent…');
+        rdrSaveRecent(file.name.replace(/\.[^.]+$/,''), ev.target.result);
+        console.warn('[trace] rdrSaveRecent terminée.');
+      }catch(err){ console.warn('[trace] exception attrapée :', err.message); alert('Erreur import : '+err.message); }
+    };
+    reader.onerror=()=>{ console.warn('[trace] FileReader.onerror déclenché !'); };
+    reader.readAsText(file);
+    e.target.value='';
+  });
+})();
 
 // Drag & drop sur l'écran d'accueil
 (function(){
