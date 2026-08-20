@@ -1462,48 +1462,6 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
 </head>
 <body data-theme="light">
 <script>try{var _dt=localStorage.getItem('cce-device-theme'); if(_dt) document.body.dataset.theme=_dt;}catch(e){}</script>
-<script>
-// ── Diagnostic temporaire : affiche toute erreur JS directement à l'écran ──
-// À retirer une fois le problème identifié. Objectif : voir ce qui plante
-// sur un appareil où l'accès à la console n'est pas pratique (tablette).
-(function(){
-  function showErr(msg){
-    try{
-      var box=document.getElementById('__cce_err_box__');
-      if(!box){
-        box=document.createElement('div');
-        box.id='__cce_err_box__';
-        box.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999999;background:#c0392b;color:#fff;'+
-          'font-family:monospace;font-size:11px;padding:8px;max-height:40vh;overflow-y:auto;white-space:pre-wrap';
-        document.body.appendChild(box);
-      }
-      var line=document.createElement('div');
-      line.style.cssText='border-top:1px solid rgba(255,255,255,.3);padding-top:4px;margin-top:4px';
-      line.textContent=msg;
-      box.appendChild(line);
-    }catch(e){}
-  }
-  window.addEventListener('error',function(e){
-    showErr('ERREUR JS : '+e.message+'\n  '+(e.filename||'?')+':'+(e.lineno||'?')+':'+(e.colno||'?'));
-  });
-  window.addEventListener('unhandledrejection',function(e){
-    showErr('PROMESSE REJETÉE : '+(e.reason&&e.reason.message?e.reason.message:e.reason));
-  });
-  // Les erreurs "attrapées" par l'app elle-même (console.warn / console.error
-  // internes, par ex. un échec silencieux du stockage) ne déclenchent ni
-  // 'error' ni 'unhandledrejection' — on les intercepte donc aussi
-  // directement, pour ne rien manquer.
-  var _origWarn=console.warn, _origError=console.error;
-  console.warn=function(){
-    try{ showErr('AVERTISSEMENT : '+Array.prototype.slice.call(arguments).map(String).join(' ')); }catch(e){}
-    _origWarn.apply(console,arguments);
-  };
-  console.error=function(){
-    try{ showErr('ERREUR (console) : '+Array.prototype.slice.call(arguments).map(String).join(' ')); }catch(e){}
-    _origError.apply(console,arguments);
-  };
-})();
-</script>
 
 <!-- ══ TOPBAR ══════════════════════════════════════════ -->
 <!-- ══ TOPBAR (READER) ═════════════════════════════════ -->
@@ -20808,8 +20766,31 @@ function rdrPrevPage(){
 })();
 
 // ── Écran d'accueil ───────────────────────────────────────
-const RDR_RECENT_KEY='cce-reader-v2-recents';
-
+// ── Stockage des "Récents" via IndexedDB (pas localStorage) ────
+// localStorage a un quota très restreint sur mobile (souvent 5-10 Mo au
+// TOTAL pour tout le site) — un seul fichier volumineux (setlist assemblée
+// avec de nombreux morceaux) peut à lui seul dépasser cette limite, en
+// particulier sur Android. IndexedDB dispose d'un quota bien plus généreux
+// (généralement calculé en pourcentage de l'espace disque libre), adapté à
+// ce genre de volume.
+const RDR_IDB_NAME='cce-reader-recents-db';
+const RDR_IDB_STORE='recents';
+const RDR_RECENT_MAX=5;
+let _rdrIdbPromise=null;
+function rdrIdbOpen(){
+  if(_rdrIdbPromise) return _rdrIdbPromise;
+  _rdrIdbPromise=new Promise((resolve,reject)=>{
+    if(!window.indexedDB){ reject(new Error('IndexedDB non supporté sur ce navigateur')); return; }
+    const req=indexedDB.open(RDR_IDB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(RDR_IDB_STORE)) db.createObjectStore(RDR_IDB_STORE,{keyPath:'name'});
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+  return _rdrIdbPromise;
+}
 function rdrHideLoadScreen(){
   const s=document.getElementById('rdr-load-screen');
   if(s){ s.classList.add('hidden'); setTimeout(()=>s.style.display='none',320); }
@@ -20820,99 +20801,110 @@ function rdrShowLoadScreen(){
   if(s){ s.style.display='flex'; requestAnimationFrame(()=>s.classList.remove('hidden')); }
 }
 
-function rdrSaveRecent(name, jsonStr){
-  console.warn('[trace] rdrSaveRecent appelée pour :', name, '— taille :', jsonStr.length);
+async function rdrSaveRecent(name, jsonStr){
   try{
-    const recents=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
-    // Ne JAMAIS tronquer : du JSON coupé à une position arbitraire n'est
-    // plus un JSON valide, ce qui provoquait une erreur au moment de
-    // rouvrir ce morceau depuis "Récents" (l'ancien code coupait à
-    // 500 000 caractères, corrompant tout fichier plus volumineux).
-    const entry={name, ts:Date.now(), data:jsonStr};
-    const filtered=recents.filter(r=>r.name!==name);
-    filtered.unshift(entry);
-    // Si le stockage est plein (fichiers volumineux, ou déjà beaucoup de
-    // récents enregistrés), on réduit progressivement le nombre de
-    // morceaux gardés plutôt que d'échouer ou de stocker une donnée
-    // partielle/corrompue. Si même un seul morceau ne tient pas, on laisse
-    // la liste précédente intacte plutôt que de la vider — mieux vaut
-    // garder ce qu'il y avait avant que de tout perdre.
-    let toKeep=Math.min(5,filtered.length), saved=false;
-    while(toKeep>0 && !saved){
-      try{
-        localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(filtered.slice(0,toKeep)));
-        saved=true;
-      }catch(quotaErr){
-        toKeep--;
-      }
-    }
-    if(!saved) console.warn('[rdrSaveRecent] pas assez de place pour garder ce morceau dans Récents — liste précédente conservée telle quelle.');
+    const db=await rdrIdbOpen();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RDR_IDB_STORE,'readwrite');
+      tx.objectStore(RDR_IDB_STORE).put({name, ts:Date.now(), data:jsonStr});
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+    });
+    // Ne garder que les RDR_RECENT_MAX plus récents — on lit tout, on trie,
+    // on supprime le surplus.
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RDR_IDB_STORE,'readwrite');
+      const store=tx.objectStore(RDR_IDB_STORE);
+      const all=[];
+      const cur=store.openCursor();
+      cur.onsuccess=e=>{
+        const c=e.target.result;
+        if(c){ all.push({key:c.primaryKey, ts:c.value.ts}); c.continue(); }
+        else{
+          all.sort((a,b)=>b.ts-a.ts);
+          all.slice(RDR_RECENT_MAX).forEach(item=>store.delete(item.key));
+          resolve();
+        }
+      };
+      cur.onerror=()=>reject(cur.error);
+    });
     rdrRenderRecents();
-  }catch(e){ console.warn('[rdrSaveRecent] erreur inattendue :', e); }
+  }catch(e){ console.warn('[rdrSaveRecent] impossible d\'enregistrer ce morceau dans Récents :', e); }
 }
 
 // Oublie la liste des morceaux ouverts précédemment (écran d'accueil) —
 // ne touche à rien d'autre : ni aux setlists, ni aux fichiers eux-mêmes,
 // juste ce raccourci d'accès rapide.
-function rdrClearRecents(){
+async function rdrClearRecents(){
   if(!confirm('Oublier la liste des morceaux ouverts précédemment ?\n(Les morceaux eux-mêmes et tes setlists ne sont pas touchés.)')) return;
-  try{ localStorage.removeItem(RDR_RECENT_KEY); }catch(e){}
+  try{
+    const db=await rdrIdbOpen();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RDR_IDB_STORE,'readwrite');
+      tx.objectStore(RDR_IDB_STORE).clear();
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){}
   rdrRenderRecents();
 }
 
-function rdrRenderRecents(){
-  console.warn('[trace] rdrRenderRecents appelée — contenu localStorage brut :', localStorage.getItem(RDR_RECENT_KEY));
+async function rdrRenderRecents(){
   const zone=document.getElementById('rdr-load-recent');
   const list=document.getElementById('rdr-load-recent-list');
   if(!zone||!list) return;
-  // Auto-test du stockage local : s'il échoue, on l'affiche clairement au
-  // lieu de laisser la zone "Récents" disparaître silencieusement sans
-  // aucune explication (ce qui rendait le problème invisible à diagnostiquer
-  // sur certains navigateurs/appareils, notamment mobiles).
-  let storageOK=true, storageErr=null;
+  let recents=[];
   try{
-    const testKey='__cce_storage_test__';
-    localStorage.setItem(testKey,'1');
-    localStorage.removeItem(testKey);
-  }catch(e){ storageOK=false; storageErr=e; }
-  if(!storageOK){
+    const db=await rdrIdbOpen();
+    recents=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RDR_IDB_STORE,'readonly');
+      const store=tx.objectStore(RDR_IDB_STORE);
+      const all=[];
+      const cur=store.openCursor();
+      cur.onsuccess=e=>{
+        const c=e.target.result;
+        if(c){ all.push(c.value); c.continue(); }
+        else resolve(all);
+      };
+      cur.onerror=()=>reject(cur.error);
+    });
+  }catch(e){
     zone.style.display='block';
     list.innerHTML=`<div style="font-family:var(--font-mono);font-size:.55rem;color:var(--ink3);padding:.4rem">
-      ⚠ Stockage local indisponible sur cet appareil/navigateur (${storageErr?.name||'erreur inconnue'}) —
+      ⚠ Stockage local indisponible sur cet appareil/navigateur (${e?.message||'erreur inconnue'}) —
       la liste "Récents" ne peut pas fonctionner ici. Vérifie que la navigation privée est désactivée,
       et que le stockage n'est pas bloqué dans les réglages du navigateur pour ce site.</div>`;
     return;
   }
-  try{
-    const recents=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
-    if(!recents.length){ zone.style.display='none'; return; }
-    zone.style.display='block';
-    list.innerHTML='';
-    recents.forEach(r=>{
-      const d=document.createElement('div');
-      d.className='rdr-recent-item';
-      d.innerHTML=`<span style="font-size:1rem">🎵</span>
-        <span style="flex:1">${r.name}</span>
-        <span style="color:var(--ink3);font-size:.55rem">${new Date(r.ts).toLocaleDateString()}</span>`;
-      d.onclick=()=>{
+  if(!recents.length){ zone.style.display='none'; return; }
+  recents.sort((a,b)=>b.ts-a.ts);
+  zone.style.display='block';
+  list.innerHTML='';
+  recents.forEach(r=>{
+    const d=document.createElement('div');
+    d.className='rdr-recent-item';
+    d.innerHTML=`<span style="font-size:1rem">🎵</span>
+      <span style="flex:1">${r.name}</span>
+      <span style="color:var(--ink3);font-size:.55rem">${new Date(r.ts).toLocaleDateString()}</span>`;
+    d.onclick=async()=>{
+      try{
+        const data=JSON.parse(r.data);
+        rdrLoadData(data, r.name);
+      }catch(e){
+        // Entrée corrompue (héritée d'un ancien bug) : on la retire
+        // silencieusement plutôt que de laisser l'utilisateur retomber
+        // dessus indéfiniment.
         try{
-          const data=JSON.parse(r.data);
-          rdrLoadData(data, r.name);
-        }catch(e){
-          // Entrée corrompue (probablement héritée de l'ancien bug de
-          // troncature) : on la retire silencieusement plutôt que de
-          // laisser l'utilisateur retomber dessus indéfiniment.
-          try{
-            const cur=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
-            localStorage.setItem(RDR_RECENT_KEY, JSON.stringify(cur.filter(x=>x.name!==r.name)));
-          }catch(cleanupErr){}
-          rdrRenderRecents();
-          alert('Ce morceau récent était corrompu (probablement à cause d\'un ancien bug) et a été retiré de la liste. Rouvre-le depuis son fichier ou sa setlist.');
-        }
-      };
-      list.appendChild(d);
-    });
-  }catch(e){ console.warn('[rdrRenderRecents] erreur inattendue :', e); }
+          const db=await rdrIdbOpen();
+          const tx=db.transaction(RDR_IDB_STORE,'readwrite');
+          tx.objectStore(RDR_IDB_STORE).delete(r.name);
+        }catch(cleanupErr){}
+        rdrRenderRecents();
+        alert('Ce morceau récent était corrompu et a été retiré de la liste. Rouvre-le depuis son fichier ou sa setlist.');
+      }
+    };
+    list.appendChild(d);
+  });
 }
 
 function rdrLoadData(data, name){
@@ -20929,32 +20921,19 @@ function rdrLoadData(data, name){
 }
 
 // Listener pour l'input fichier de l'écran d'accueil
-(function(){
-  const inputEl=document.getElementById('rdr-load-input');
-  if(!inputEl){ console.warn('[trace] élément rdr-load-input introuvable dans le DOM !'); return; }
-  console.warn('[trace] listener posé sur rdr-load-input');
-  inputEl.addEventListener('change',function(e){
-    console.warn('[trace] change déclenché sur rdr-load-input');
-    const file=e.target.files[0];
-    if(!file){ console.warn('[trace] aucun fichier sélectionné (e.target.files vide)'); return; }
-    console.warn('[trace] fichier choisi :', file.name, '— taille :', file.size);
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      console.warn('[trace] FileReader.onload déclenché, longueur lue :', ev.target.result.length);
-      try{
-        const data=JSON.parse(ev.target.result);
-        console.warn('[trace] JSON.parse réussi, appel de rdrLoadData…');
-        rdrLoadData(data, file.name.replace(/\.[^.]+$/,''));
-        console.warn('[trace] rdrLoadData terminée, appel de rdrSaveRecent…');
-        rdrSaveRecent(file.name.replace(/\.[^.]+$/,''), ev.target.result);
-        console.warn('[trace] rdrSaveRecent terminée.');
-      }catch(err){ console.warn('[trace] exception attrapée :', err.message); alert('Erreur import : '+err.message); }
-    };
-    reader.onerror=()=>{ console.warn('[trace] FileReader.onerror déclenché !'); };
-    reader.readAsText(file);
-    e.target.value='';
-  });
-})();
+document.getElementById('rdr-load-input')?.addEventListener('change',function(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      rdrLoadData(data, file.name.replace(/\.[^.]+$/,''));
+      rdrSaveRecent(file.name.replace(/\.[^.]+$/,''), ev.target.result);
+    }catch(err){ alert('Erreur import : '+err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+});
 
 // Drag & drop sur l'écran d'accueil
 (function(){
