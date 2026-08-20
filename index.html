@@ -20805,7 +20805,7 @@ function rdrSaveRecent(name, jsonStr){
     }
     if(!saved) console.warn('[rdrSaveRecent] pas assez de place pour garder ce morceau dans Récents — liste précédente conservée telle quelle.');
     rdrRenderRecents();
-  }catch(e){}
+  }catch(e){ console.warn('[rdrSaveRecent] erreur inattendue :', e); }
 }
 
 // Oublie la liste des morceaux ouverts précédemment (écran d'accueil) —
@@ -20818,11 +20818,29 @@ function rdrClearRecents(){
 }
 
 function rdrRenderRecents(){
+  const zone=document.getElementById('rdr-load-recent');
+  const list=document.getElementById('rdr-load-recent-list');
+  if(!zone||!list) return;
+  // Auto-test du stockage local : s'il échoue, on l'affiche clairement au
+  // lieu de laisser la zone "Récents" disparaître silencieusement sans
+  // aucune explication (ce qui rendait le problème invisible à diagnostiquer
+  // sur certains navigateurs/appareils, notamment mobiles).
+  let storageOK=true, storageErr=null;
+  try{
+    const testKey='__cce_storage_test__';
+    localStorage.setItem(testKey,'1');
+    localStorage.removeItem(testKey);
+  }catch(e){ storageOK=false; storageErr=e; }
+  if(!storageOK){
+    zone.style.display='block';
+    list.innerHTML=`<div style="font-family:var(--font-mono);font-size:.55rem;color:var(--ink3);padding:.4rem">
+      ⚠ Stockage local indisponible sur cet appareil/navigateur (${storageErr?.name||'erreur inconnue'}) —
+      la liste "Récents" ne peut pas fonctionner ici. Vérifie que la navigation privée est désactivée,
+      et que le stockage n'est pas bloqué dans les réglages du navigateur pour ce site.</div>`;
+    return;
+  }
   try{
     const recents=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
-    const zone=document.getElementById('rdr-load-recent');
-    const list=document.getElementById('rdr-load-recent-list');
-    if(!zone||!list) return;
     if(!recents.length){ zone.style.display='none'; return; }
     zone.style.display='block';
     list.innerHTML='';
@@ -20850,7 +20868,7 @@ function rdrRenderRecents(){
       };
       list.appendChild(d);
     });
-  }catch(e){}
+  }catch(e){ console.warn('[rdrRenderRecents] erreur inattendue :', e); }
 }
 
 function rdrLoadData(data, name){
