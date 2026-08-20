@@ -1489,6 +1489,19 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
   window.addEventListener('unhandledrejection',function(e){
     showErr('PROMESSE REJETÉE : '+(e.reason&&e.reason.message?e.reason.message:e.reason));
   });
+  // Les erreurs "attrapées" par l'app elle-même (console.warn / console.error
+  // internes, par ex. un échec silencieux du stockage) ne déclenchent ni
+  // 'error' ni 'unhandledrejection' — on les intercepte donc aussi
+  // directement, pour ne rien manquer.
+  var _origWarn=console.warn, _origError=console.error;
+  console.warn=function(){
+    try{ showErr('AVERTISSEMENT : '+Array.prototype.slice.call(arguments).map(String).join(' ')); }catch(e){}
+    _origWarn.apply(console,arguments);
+  };
+  console.error=function(){
+    try{ showErr('ERREUR (console) : '+Array.prototype.slice.call(arguments).map(String).join(' ')); }catch(e){}
+    _origError.apply(console,arguments);
+  };
 })();
 </script>
 
@@ -20808,6 +20821,7 @@ function rdrShowLoadScreen(){
 }
 
 function rdrSaveRecent(name, jsonStr){
+  console.warn('[trace] rdrSaveRecent appelée pour :', name, '— taille :', jsonStr.length);
   try{
     const recents=JSON.parse(localStorage.getItem(RDR_RECENT_KEY)||'[]');
     // Ne JAMAIS tronquer : du JSON coupé à une position arbitraire n'est
@@ -20847,6 +20861,7 @@ function rdrClearRecents(){
 }
 
 function rdrRenderRecents(){
+  console.warn('[trace] rdrRenderRecents appelée — contenu localStorage brut :', localStorage.getItem(RDR_RECENT_KEY));
   const zone=document.getElementById('rdr-load-recent');
   const list=document.getElementById('rdr-load-recent-list');
   if(!zone||!list) return;
