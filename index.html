@@ -1462,6 +1462,35 @@ body.rdr-hide-scaleviewers .rdr-scale-viewer{display:none!important}
 </head>
 <body data-theme="light">
 <script>try{var _dt=localStorage.getItem('cce-device-theme'); if(_dt) document.body.dataset.theme=_dt;}catch(e){}</script>
+<script>
+// ── Diagnostic temporaire : affiche toute erreur JS directement à l'écran ──
+// À retirer une fois le problème identifié. Objectif : voir ce qui plante
+// sur un appareil où l'accès à la console n'est pas pratique (tablette).
+(function(){
+  function showErr(msg){
+    try{
+      var box=document.getElementById('__cce_err_box__');
+      if(!box){
+        box=document.createElement('div');
+        box.id='__cce_err_box__';
+        box.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999999;background:#c0392b;color:#fff;'+
+          'font-family:monospace;font-size:11px;padding:8px;max-height:40vh;overflow-y:auto;white-space:pre-wrap';
+        document.body.appendChild(box);
+      }
+      var line=document.createElement('div');
+      line.style.cssText='border-top:1px solid rgba(255,255,255,.3);padding-top:4px;margin-top:4px';
+      line.textContent=msg;
+      box.appendChild(line);
+    }catch(e){}
+  }
+  window.addEventListener('error',function(e){
+    showErr('ERREUR JS : '+e.message+'\n  '+(e.filename||'?')+':'+(e.lineno||'?')+':'+(e.colno||'?'));
+  });
+  window.addEventListener('unhandledrejection',function(e){
+    showErr('PROMESSE REJETÉE : '+(e.reason&&e.reason.message?e.reason.message:e.reason));
+  });
+})();
+</script>
 
 <!-- ══ TOPBAR ══════════════════════════════════════════ -->
 <!-- ══ TOPBAR (READER) ═════════════════════════════════ -->
